@@ -843,7 +843,9 @@ abstract class Zend_Db_Adapter_Abstract
         } elseif (is_float($value)) {
             return sprintf('%F', $value);
         }
-        return "'" . addcslashes($value, "\000\n\r\\'\"\032") . "'";
+        // Cast: addcslashes() rejects null on PHP 8.1+, and (string) null gives
+        // the same empty string it always produced.
+        return "'" . addcslashes((string) $value, "\000\n\r\\'\"\032") . "'";
     }
 
     /**

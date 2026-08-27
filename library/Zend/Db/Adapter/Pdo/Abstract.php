@@ -299,7 +299,9 @@ abstract class Zend_Db_Adapter_Pdo_Abstract extends Zend_Db_Adapter_Abstract
             return $value;
         }
         $this->_connect();
-        return $this->_connection->quote($value);
+        // Cast: PDO::quote() rejects null on PHP 8.1+, and quote((string) null)
+        // returns the same empty quoted string that quote(null) always did.
+        return $this->_connection->quote((string) $value);
     }
 
     /**
