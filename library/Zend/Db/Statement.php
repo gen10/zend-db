@@ -168,6 +168,27 @@ abstract class Zend_Db_Statement implements Zend_Db_Statement_Interface
     }
 
     /**
+     * preg_replace() that leaves the subject alone when the pattern fails.
+     *
+     * The patterns in _stripQuoted() backtrack heavily - the one for single-quoted values says so
+     * itself - and preg_replace() answers null when it exceeds pcre.backtrack_limit rather than
+     * throwing. That null flowed into the next preg_replace() as its subject, raising a PHP 8.3
+     * deprecation, and then out of _stripQuoted() as its return value, so _parseParameters()
+     * scanned null and found no named parameters at all: a long enough query silently lost every
+     * binding. Returning the SQL unstripped is the lesser failure - the parameters stay visible.
+     *
+     * @param string $pattern
+     * @param string $sql
+     * @return string
+     */
+    private static function _stripPattern($pattern, $sql)
+    {
+        $stripped = preg_replace($pattern, '', $sql);
+
+        return $stripped === null ? $sql : $stripped;
+    }
+
+    /**
      * Remove parts of a SQL string that contain quoted strings
      * of values or identifiers.
      *
@@ -191,13 +212,13 @@ abstract class Zend_Db_Statement implements Zend_Db_Statement_Interface
         if (!empty($q)) {
             $escapeChar = preg_quote($escapeChar);
             // this segfaults only after 65,000 characters instead of 9,000
-            $sql = preg_replace("/$q([^$q{$escapeChar}]*|($qe)*)*$q/s", '', $sql);
+            $sql = self::_stripPattern("/$q([^$q{$escapeChar}]*|($qe)*)*$q/s", $sql);
         }
         
         // get a version of the SQL statement with all quoted
         // values and delimited identifiers stripped out
         // remove "foo\"bar"
-        $sql = preg_replace("/\"(\\\\\"|[^\"])*\"/Us", '', $sql);
+        $sql = self::_stripPattern("/\"(\\\\\"|[^\"])*\"/Us", $sql);
 
         // get the character for delimited id quotes,
         // this is usually " but in MySQL is `
@@ -209,7 +230,7 @@ abstract class Zend_Db_Statement implements Zend_Db_Statement_Interface
         $de = substr($de, 1, 2);
         $de = preg_quote($de);
         // Note: $de and $d where never used..., now they are:
-        $sql = preg_replace("/$d($de|\\\\{2}|[^$d])*$d/Us", '', $sql);
+        $sql = self::_stripPattern("/$d($de|\\\\{2}|[^$d])*$d/Us", $sql);
         return $sql;
     }
 
